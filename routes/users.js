@@ -51,6 +51,22 @@ const routes = [
       }
     },
     handler: users.updateUser
+  },
+  {
+    method: 'POST',
+    path: '/deleteUser',
+    config: {
+      auth: false,
+      tags: ['api'],
+      description: '删除用户',
+      notes: '删除用户',
+      validate: {
+        payload: Joi.object({
+          id: Joi.string().required().description('用户id')
+        })
+      }
+    },
+    handler: users.deleteUser
   }
 ];
 

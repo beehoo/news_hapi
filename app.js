@@ -8,7 +8,7 @@ const HapiSwagger = require('hapi-swagger');
 const routes = require('./routes');
 const { dbUrl, JWTSecret } = require('./config');
 
-const validate = async function (decoded, request, h) {
+const validate = async (decoded, request, h) => {
   if (!decoded) {
     return { isValid: false }
   }

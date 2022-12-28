@@ -1,6 +1,7 @@
 const Boom = require('@hapi/boom');
 const { SQL_CODE } = require('../config');
 const { filterKeys } = require('../utils');
+const dayjs = require('dayjs');
 
 /** 
  * 创建用户
@@ -50,8 +51,7 @@ const createUser = async (request) => {
  * @param {String} birthday 生日 
  */
 const updateUser = async (request) => {
-  const db = request.mongo.db;
-  const ObjectID = request.mongo.ObjectID;
+  const { db, ObjectID } = request.mongo;
   const params = request.payload || {};
 
   // 查询条件
@@ -61,6 +61,7 @@ const updateUser = async (request) => {
   // 过滤待修改参数，避免创建额外属性
   const keys = ['password', 'nick', 'udesc', 'avatar', 'gender', 'birthday'];
   const result = filterKeys(params, keys, true);
+  result.modTime = dayjs().format('YYYY-MM-DD HH:mm:ss'); // 修改时间
 
   try {
     const response = await db.collection('users').updateOne(query, { $set: result });
@@ -70,7 +71,29 @@ const updateUser = async (request) => {
   }
 }
 
+/**
+ * 删除用户
+ * @param {String} id 用户id
+ */
+const deleteUser = async (request) => {
+  const { db, ObjectID } = request.mongo;
+  const params = request.payload || {};
+
+  // 查询条件
+  const query = {
+    _id: new ObjectID(params.id)
+  };
+
+  try {
+    const response = await db.collection('users').deleteOne(query);
+    return { code: SQL_CODE.SUCCESS, data: response };
+  } catch (err) {
+    throw Boom.internal('Internal MongoDB error', err);
+  }
+}
+
 module.exports = {
   createUser,
-  updateUser
+  updateUser,
+  deleteUser
 };
