@@ -1,38 +1,45 @@
 const Boom = require('@hapi/boom');
 const { SQL_CODE } = require('../config');
 const { filterKeys } = require('../utils');
-const dayjs = require('dayjs');
 
 /**
  * 查询标签
  * @param {String} id 标签id
  * @param {Array} ids 标签id（多个）
+ * @param {Number} page 页码
+ * @param {Number} limit 分页长度 
  */
 const queryTags = async (request) => {
   const { db, ObjectID } = request.mongo;
-  const query = request.payload || {};
+  const payload = request.payload || {};
 
   // 查询条件
   const params = {};
-  if (query.id) {
-    params._id = new ObjectID(query.id);
+  if (payload.id) {
+    params._id = new ObjectID(payload.id);
   }
-  if (query.ids) {
-    const objectIds = query.ids.map(id => new ObjectID(id));
+  if (payload.ids) {
+    const objectIds = payload.ids.map(id => new ObjectID(id));
     params._id = { $in: objectIds };
   }
 
   // 分页
-  const page = params.page;
-  const limit = params.limit;
+  const page = payload.page;
+  const limit = payload.limit;
 
   try {
     const total = await db.collection('tags').count(params);
-    const response = (page && limit)
-      ? await db.collection('tags').find(params)
+    const response = (page && limit) ?
+      await db.collection('tags')
+        .find(params)
+        .sort({ createTime: -1 })
         .skip((page - 1) * limit)
-        .limit(limit).toArray()
-      : await db.collection('tags').find(params).toArray();
+        .limit(limit)
+        .toArray() :
+      await db.collection('tags')
+        .find(params)
+        .sort({ createTime: -1 })
+        .toArray();
     return { code: SQL_CODE.SUCCESS, total: total, data: response };
   } catch (err) {
     throw Boom.internal('Internal MongoDB error', err);
@@ -46,15 +53,15 @@ const queryTags = async (request) => {
  */
 const createTag = async (request) => {
   const db = request.mongo.db;
-  const params = request.payload || {};
-  const result = {
-    name: params.name,
-    color: params.color || '',
-    createTime: dayjs().format('YYYY-MM-DD HH:mm:ss')
+  const payload = request.payload || {};
+  const params = {
+    name: payload.name,
+    color: payload.color || '',
+    createTime: new Date()
   };
 
   try {
-    const response = await db.collection('tags').insertOne(result);
+    const response = await db.collection('tags').insertOne(params);
     return { code: SQL_CODE.SUCCESS, data: { insertedId: response.insertedId } };
   } catch (err) {
     throw Boom.internal('Internal MongoDB error', err);
@@ -69,19 +76,19 @@ const createTag = async (request) => {
  */
 const updateTag = async (request) => {
   const { db, ObjectID } = request.mongo;
-  const params = request.payload || {};
+  const payload = request.payload || {};
   // 查询条件
   const query = {
-    _id: new ObjectID(params.id)
+    _id: new ObjectID(payload.id)
   };
 
   // 过滤待修改参数，避免创建额外属性
   const keys = ['name', 'color'];
-  const result = filterKeys(params, keys, true);
-  result.modTime = dayjs().format('YYYY-MM-DD HH:mm:ss'); // 修改时间
+  const params = filterKeys(payload, keys, true);
+  params.modTime = new Date(); // 修改时间
 
   try {
-    const response = await db.collection('tags').updateOne(query, { $set: result });
+    const response = await db.collection('tags').updateOne(query, { $set: params });
     return { code: SQL_CODE.SUCCESS, data: response };
   } catch (err) {
     throw Boom.internal('Internal MongoDB error', err);
@@ -94,10 +101,10 @@ const updateTag = async (request) => {
  */
 const deleteTag = async (request) => {
   const { db, ObjectID } = request.mongo;
-  const params = request.payload || {};
+  const payload = request.payload || {};
   // 查询条件
   const query = {
-    _id: new ObjectID(params.id)
+    _id: new ObjectID(payload.id)
   };
 
   try {

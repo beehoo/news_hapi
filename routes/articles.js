@@ -13,9 +13,11 @@ const routes = [
       validate: {
         payload: Joi.object().keys({
           id: Joi.string().description('文章id'),
-          flag: Joi.number().description('文章状态，0为未发布，1为已发布'),
+          flag: Joi.number().valid(0, 1).description('文章状态，0为未发布，1为已发布'),
           search: Joi.string().description('搜索内容，模糊查询文章标题、简介或内容'),
           tags: Joi.array().items(Joi.string()).description('文章标签'),
+          startTime: Joi.date().description('发布开始时间'),
+          endTime: Joi.date().description('发布结束时间'),
           page: Joi.number().integer().description('分页'),
           limit: Joi.number().integer().description('分页长度')
         }).unknown()
@@ -31,6 +33,7 @@ const routes = [
           cont: Joi.string().description('文章内容'),
           tags: Joi.array().description('文章标签'),
           flag: Joi.number().valid(0, 1).description('文章状态，0为未发布，1为已发布'),
+          publishTime: Joi.date().description('文章发布时间'),
           createTime: Joi.date().description('文章创建时间'),
           modTime: Joi.date().description('文章修改时间'),
         }))

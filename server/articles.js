@@ -1,7 +1,6 @@
 const Boom = require('@hapi/boom');
-const { SQL_CODE } = require('../config');
+const { SQL_CODE, timezone } = require('../config');
 const { filterKeys } = require('../utils');
-const dayjs = require('dayjs');
 
 /**
  * 查询文章
@@ -9,35 +8,43 @@ const dayjs = require('dayjs');
  * @param {Number} flag 文章状态，0或1
  * @param {String} search 搜索内容，模糊查询文章标题、简介和内容
  * @param {Array} tags 标签
+ * @param {String} startTime 发布开始时间
+ * @param {String} endTime 发布结束时间
  * @param {Number} page 分页
  * @param {Number} limit 分页长度
  */
 const queryArticles = async (request) => {
   const { db, ObjectID } = request.mongo;
-  const query = request.payload || {};
+  const payload = request.payload || {};
 
   // 查询条件
   const params = {};
-  if (query.id) {
-    params._id = new ObjectID(query.id);
+  if (payload.id) {
+    params._id = new ObjectID(payload.id);
   }
-  if (query.flag) {
-    params.flag = parseInt(query.flag);
+  if (payload.flag) {
+    params.flag = parseInt(payload.flag);
   }
-  if (query.search) {
+  if (payload.search) {
     params.$or = [
-      { title: { $regex: query.search } },
-      { intro: { $regex: query.search } },
-      { cont: { $regex: query.search } }
+      { title: { $regex: payload.search } },
+      { intro: { $regex: payload.search } },
+      { cont: { $regex: payload.search } }
     ];
   }
-  if (query.tags) {
-    params.tags = { $in: query.tags }
+  if (payload.tags) {
+    params.tags = { $in: payload.tags }
+  }
+  if (payload.startTime && payload.endTime) {
+    params.publishTime = {
+      $gte: new Date(payload.startTime),
+      $lte: new Date(payload.endTime)
+    }
   }
 
-  // 聚合操作
+  // 聚合操作，关联tags对应数据
   const pipeline = [
-    { $match: params },
+    { $match: params }, // 查询数据
     {
       $addFields: {
         tags: {
@@ -45,6 +52,13 @@ const queryArticles = async (request) => {
             input: '$tags',
             as: 'tag',
             in: { $toObjectId: '$$tag' }
+          }
+        },
+        publishTime: {
+          $dateToString: {
+            format: '%Y-%m-%d %H:%M:%S',
+            date: '$publishTime',
+            timezone: timezone
           }
         }
       }
@@ -57,12 +71,13 @@ const queryArticles = async (request) => {
         as: 'tags'
       }
     },
+    { $sort: { publishTime: -1, createTime: -1 } } // 排序，按发布时间和创建时间降序
   ]
-
-  if (params.page && params.limit) {
+  // 分页
+  if (payload.page && payload.limit) {
     pipeline.push(
-      { $skip: (params.page - 1) * params.limit },
-      { $limit: params.limit }
+      { $skip: (payload.page - 1) * payload.limit },
+      { $limit: payload.limit }
     )
   }
 
@@ -87,20 +102,21 @@ const queryArticles = async (request) => {
  */
 const createArticle = async (request) => {
   const db = request.mongo.db;
-  const params = request.payload || {};
-  const result = {
-    title: params.title,
-    cover: params.cover || '',
-    author: params.author || '',
-    intro: params.intro || '',
-    tags: params.tags || [],
-    cont: params.cont,
-    flag: params.flag || 0,
-    createTime: dayjs().format('YYYY-MM-DD HH:mm:ss')
+  const payload = request.payload || {};
+  const params = {
+    title: payload.title,
+    cover: payload.cover || '',
+    author: payload.author || '',
+    intro: payload.intro || '',
+    tags: payload.tags || [],
+    cont: payload.cont,
+    flag: payload.flag || 0,
+    publishTime: payload.flag ? new Date() : '', // 发布时间
+    createTime: new Date() // 创建时间
   };
 
   try {
-    const response = await db.collection('articles').insertOne(result);
+    const response = await db.collection('articles').insertOne(params);
     return { code: SQL_CODE.SUCCESS, data: { insertedId: response.insertedId } };
   } catch (err) {
     throw Boom.internal('Internal MongoDB error', err);
@@ -119,19 +135,24 @@ const createArticle = async (request) => {
  */
 const updateArticle = async (request) => {
   const { db, ObjectID } = request.mongo;
-  const params = request.payload || {};
+  const payload = request.payload || {};
   // 查询条件
   const query = {
-    _id: new ObjectID(params.id)
+    _id: new ObjectID(payload.id)
   };
 
   // 过滤待修改参数，避免创建额外属性
   const keys = ['title', 'cover', 'intro', 'tags', 'cont', 'flag'];
-  const result = filterKeys(params, keys, true);
-  result.modTime = dayjs().format('YYYY-MM-DD HH:mm:ss'); // 修改时间
+  const params = filterKeys(payload, keys, true);
+  // 发布时间
+  if (payload.flag && !payload.publishTime) {
+    params.publishTime = new Date();
+  }
+  // 修改时间
+  params.modTime = new Date();
 
   try {
-    const response = await db.collection('articles').updateOne(query, { $set: result });
+    const response = await db.collection('articles').updateOne(query, { $set: params });
     return { code: SQL_CODE.SUCCESS, data: response };
   } catch (err) {
     throw Boom.internal('Internal MongoDB error', err);
@@ -144,10 +165,10 @@ const updateArticle = async (request) => {
  */
 const deleteArticle = async (request) => {
   const { db, ObjectID } = request.mongo;
-  const params = request.payload || {};
+  const payload = request.payload || {};
   // 查询条件
   const query = {
-    _id: new ObjectID(params.id)
+    _id: new ObjectID(payload.id)
   };
 
   try {

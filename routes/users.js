@@ -3,6 +3,38 @@ const users = require('../server/users');
 
 const routes = [
   {
+    method: 'GET',
+    path: '/queryUsers',
+    config: {
+      auth: false,
+      tags: ['api'],
+      description: '查询用户',
+      notes: '查询用户',
+      validate: {
+        query: Joi.object({
+          id: Joi.string().description('用户id'),
+          nick: Joi.string().description('用户昵称，模糊查询'),
+          phone: Joi.string().description('手机号'),
+          page: Joi.number().integer().description('页码'),
+          limit: Joi.number().integer().description('分页长度')
+        }),
+      },
+      response: {
+        sample: 0,
+        schema: Joi.object({
+          _id: Joi.number().description('用户id'),
+          nick: Joi.string().description('用户昵称'),
+          phone: Joi.string().description('用户手机号'),
+          udesc: Joi.string().description('用户简介'),
+          avatar: Joi.string().uri().description('用户头像'),
+          gender: Joi.number().valid(0, 1).description('用户性别，0位女，1为男'),
+          birthday: Joi.date().description('用户生日')
+        })
+      }
+    },
+    handler: users.queryUsers
+  },
+  {
     method: 'POST',
     path: '/createUser',
     config: {
